@@ -43,6 +43,7 @@ h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em;text-wrap:balan
 .sec{margin:0 0 7px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em}
 .views{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .views button{border:0;background:var(--btn);color:var(--fg);font:500 12.5px var(--sans);padding:9px 4px;border-radius:8px;cursor:pointer}
+#presets{grid-template-columns:1fr 1fr}
 .views button[aria-pressed="true"]{background:var(--btn-on);color:var(--btn-on-fg)}
 .views button:focus-visible,#collapse:focus-visible,.tg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
 .toggles{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
@@ -93,7 +94,7 @@ h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em;text-wrap:balan
 <aside class="panel" id="panel">
   <header>
     <div>
-      <p class="eyebrow">무인 멀티 플레이룸 · 촬영존 안쪽 배치안</p>
+      <p class="eyebrow">무인 멀티 플레이룸 · 배치 플래너</p>
       <h1>멀티 플레이룸 3D</h1>
     </div>
     <button id="collapse" aria-label="패널 접기" aria-expanded="true">–</button>
@@ -115,6 +116,20 @@ h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em;text-wrap:balan
         <button data-view="inner" aria-pressed="false">안쪽에서</button>
         <button data-view="walk" aria-pressed="false">걸어보기</button>
       </div>
+    </div>
+    <div>
+      <p class="sec">배치안 비교 · 추천 5안 + GPT 3안</p>
+      <div class="views" id="presets">
+        <button data-p="r1" aria-pressed="true">추천1 시야개방</button>
+        <button data-p="r2" aria-pressed="false">추천2 최대수용</button>
+        <button data-p="r3" aria-pressed="false">추천3 포토스튜디오</button>
+        <button data-p="r4" aria-pressed="false">추천4 도로쇼윈도</button>
+        <button data-p="r5" aria-pressed="false">추천5 라운지+키즈</button>
+        <button data-p="gpt1" aria-pressed="false">GPT① 촬영안쪽</button>
+        <button data-p="gpt2" aria-pressed="false">GPT② 입구촬영</button>
+        <button data-p="gpt3" aria-pressed="false">GPT③ 도로노출</button>
+      </div>
+      <p class="mread muted" id="p-note"></p>
     </div>
     <div>
       <p class="sec">기기 배치 · 끌어서 옮기기</p>
@@ -1047,7 +1062,7 @@ function rectOf(m, withUse) { const e = extents(m.g.rotation.y, withUse ? { ...m
 
 /* ---------- 증명사진 촬영기 (일반 셀프 증명사진 키오스크 크기 추정) ---------- */
 function idPhotoBooth(o) {
-  const g = new THREE.Group(), BW = .62, BD = .55, BH = 1.8, fz = 0;
+  const g = new THREE.Group(), BW = .6, BD = .45, BH = 1.8, fz = 0;
   const bodyM = new THREE.MeshStandardMaterial({ color: 0xf4f4f2, roughness: .4 }), darkM = new THREE.MeshStandardMaterial({ color: 0x24262b, roughness: .4 });
   box(BW, BH, BD, bodyM, 0, BH / 2, -BD / 2, g);
   box(BW - .06, BH - .3, .01, darkM, 0, BH / 2 + .05, fz + .005, g, false);
@@ -1061,7 +1076,7 @@ function idPhotoBooth(o) {
   const stool = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .05, 24), new THREE.MeshStandardMaterial({ color: 0x2b2d31, roughness: .5 })); stool.position.set(0, .47, .75); g.add(stool);
   rod(V(0, .02, .75), V(0, .45, .75), .025, M.steel, g, 12);
   const sb = new THREE.Mesh(new THREE.CylinderGeometry(.2, .2, .02, 24), M.steel); sb.position.set(0, .01, .75); g.add(sb);
-  return finishMachine(g, { fp: { x0: -BW / 2, x1: BW / 2, z0: -BD, z1: 0 }, use: 1.0, h: BH, glow: null, mark: 0x60a5fa, name: o.name, dims: '62×55×180cm 추정 · 촬영 100', home: o.home, dot: '#60a5fa' });
+  return finishMachine(g, { fp: { x0: -BW / 2, x1: BW / 2, z0: -BD, z1: 0 }, use: 1.0, h: BH, glow: null, mark: 0x60a5fa, name: o.name, dims: '60×45×180cm 개방형 · 촬영 90~120', home: o.home, dot: '#60a5fa' });
 }
 
 /* ---------- 카페 테이블 (매장 기존 원목 60×60 상판 + 흰 의자 2개 재활용) ---------- */
@@ -1102,22 +1117,59 @@ let photoMode = true;
 function applyPhotoMode() { machines.forEach(m => { if (m.standee) { m.standee.visible = photoMode; m.model.visible = !photoMode; } }); }
 
 /* ---------- 배치 (멀티 플레이룸 2안 : 촬영기 2대가 안쪽 흰 롤스크린을 배경으로, 뒷면은 인형뽑기로 가림) ---------- */
-const P = (m, key, rep = 1) => { if (key && PHOTOS[key]) { makeStandee(m, key, rep); m.photo = PHOTOS[key]; } machines.push(m); return m; };
+const P = (id, m, key, rep = 1) => { m.id = id; if (key && PHOTOS[key]) { makeStandee(m, key, rep); m.photo = PHOTOS[key]; } machines.push(m); return m; };
 const RP = -PI / 2, RS = PI / 2, RE = PI;   // RP: 도로측을 봄 · RS: 파티션을 봄 · RE: 출입문을 봄 · 0: 안쪽 창을 봄
-P(accessoryWall({ name: '포카 악세사리 벽', w: 1.6, home: { x: 2.1, z: 0, ry: 0 } }), 'acc');
-P(gachaSet({ name: '가챠 3단 4줄 ①', count: 4, home: { x: 0, z: .9, ry: RS } }), 'gacha', 4);
-P(gachaSet({ name: '가챠 3단 4줄 ②', count: 4, home: { x: 0, z: 2.65, ry: RS } }), 'gacha', 4);
-P(pocaiSet({ name: '포카아이 8대', cols: 4, home: { x: 3, z: 1.9, ry: RP } }), 'pocai');
-P(kiosk({ name: '도전', w: .5, h: 1.42, d: .45, body: 0xf4f4f2, sy: 1.22, sw: .34, sh: .22, tilt: .35, title: '도전!', sub: '반응속도 챌린지', scr: ['#ffb02e', '#ff5a2e'], acc: '#1e1f22', decal: [['도', 70, 80], ['전', 70, 170]], decalBg: '#1e1f22', dh: .6, dy: .55, button: .95, mark: 0xffb02e, dot: '#ffb02e', home: { x: 3, z: 3.05, ry: RP } }), 'dojeon');
-P(kiosk({ name: '하루손금', w: .5, h: 1.42, d: .45, body: 0xf6f6f4, sy: 1.25, sw: .36, sh: .22, tilt: .3, title: '하루손금', sub: '손바닥을 올려주세요', scr: ['#ffd7d0', '#e8584a'], acc: '#c8372d', decal: [['하루손금', 34, 70]], decalBg: '#f6f6f4', dh: .4, dy: .72, palm: .92, mark: 0xff7a6b, dot: '#ff7a6b', home: { x: 3, z: 3.6, ry: RP } }), 'haru');
-P(clawMachine({ name: '인형뽑기 A', body: 0xeef3f8, n1: 0x2f8cff, n1Css: '#3a9bff', n2: 0x37d5ff, floor: 0xffc9dc, panel: 'full', sign: '인형뽑기', home: { x: .4, z: 4.55, ry: RE } }), 'clawA');
-P(clawMachine({ name: '인형뽑기 B', body: 0x2f4fd6, n1: 0xff2bd6, n1Css: '#ff3bd9', n2: 0x4a7bff, floor: 0xf2f4ff, panel: 'pods', sign: '인형뽑기', home: { x: 1.2, z: 4.55, ry: RE } }), 'clawB');
-P(mirrorBooth({ name: '미러포토', home: { x: .5, z: 5.3, ry: 0 } }), 'mirror');
-P(idPhotoBooth({ name: '증명사진', home: { x: 1.3, z: 5.3, ry: 0 } }), null);
-P(backdrop({ name: '촬영 배경판', home: { x: .78, z: 7, ry: PI } }), null);
-P(cafeTable({ name: '카페 테이블 ①', home: { x: 2.3, z: 5.7, ry: 0 } }), null);
-P(cafeTable({ name: '카페 테이블 ②', yellow: true, home: { x: 2.3, z: 6.6, ry: 0 } }), null);
-machines.forEach(m => { m.g.position.set(m.home.x, 0, m.home.z); m.g.rotation.y = m.home.ry; settle(m); });
+P('acc', accessoryWall({ name: '포카 악세사리 벽', w: 1.6, home: { x: 2.1, z: 0, ry: 0 } }), 'acc');
+P('g5', gachaSet({ name: '가챠 3단 5줄', count: 5, home: { x: 0, z: 1.1, ry: RS } }), 'gacha', 5);
+P('g5b', gachaSet({ name: '가챠 3단 5줄 ②', count: 5, home: { x: 0, z: 3.3, ry: RS } }), 'gacha', 5);
+P('g3', gachaSet({ name: '가챠 3단 3줄', count: 3, home: { x: 0, z: 2.9, ry: RS } }), 'gacha', 3);
+P('g1', gachaSet({ name: '가챠 3단 1줄', count: 1, home: { x: 1.2, z: 4.2, ry: RE } }), 'gacha', 1);
+P('pocai', pocaiSet({ name: '포카아이 8대', cols: 4, home: { x: 3, z: 1.9, ry: RP } }), 'pocai');
+P('dojeon', kiosk({ name: '도전', w: .5, h: 1.42, d: .45, body: 0xf4f4f2, sy: 1.22, sw: .34, sh: .22, tilt: .35, title: '도전!', sub: '반응속도 챌린지', scr: ['#ffb02e', '#ff5a2e'], acc: '#1e1f22', decal: [['도', 70, 80], ['전', 70, 170]], decalBg: '#1e1f22', dh: .6, dy: .55, button: .95, mark: 0xffb02e, dot: '#ffb02e', home: { x: 3, z: 3.05, ry: RP } }), 'dojeon');
+P('haru', kiosk({ name: '하루손금', w: .5, h: 1.42, d: .45, body: 0xf6f6f4, sy: 1.25, sw: .36, sh: .22, tilt: .3, title: '하루손금', sub: '손바닥을 올려주세요', scr: ['#ffd7d0', '#e8584a'], acc: '#c8372d', decal: [['하루손금', 34, 70]], decalBg: '#f6f6f4', dh: .4, dy: .72, palm: .92, mark: 0xff7a6b, dot: '#ff7a6b', home: { x: 3, z: 3.6, ry: RP } }), 'haru');
+P('clawA', clawMachine({ name: '인형뽑기 A', body: 0xeef3f8, n1: 0x2f8cff, n1Css: '#3a9bff', n2: 0x37d5ff, floor: 0xffc9dc, panel: 'full', sign: '인형뽑기', home: { x: .4, z: 4.55, ry: RE } }), 'clawA');
+P('clawB', clawMachine({ name: '인형뽑기 B', body: 0x2f4fd6, n1: 0xff2bd6, n1Css: '#ff3bd9', n2: 0x4a7bff, floor: 0xf2f4ff, panel: 'pods', sign: '인형뽑기', home: { x: 1.2, z: 4.55, ry: RE } }), 'clawB');
+P('mirror', mirrorBooth({ name: '미러포토', home: { x: .5, z: 5.3, ry: 0 } }), 'mirror');
+P('idp', idPhotoBooth({ name: '증명사진', home: { x: 1.3, z: 5.3, ry: 0 } }), null);
+P('bd', backdrop({ name: '촬영 배경판', home: { x: .78, z: 7, ry: PI } }), null);
+P('kids', kidsZone({ name: '키즈 코너', w: 1.0, d: 1.35, compact: true, home: { x: 2.5, z: 7, ry: PI } }), null);
+P('t1', cafeTable({ name: '카페 테이블 ①', home: { x: 2.3, z: 5.7, ry: 0 } }), null);
+P('t2', cafeTable({ name: '카페 테이블 ②', yellow: true, home: { x: 2.3, z: 6.6, ry: 0 } }), null);
+
+/* ---------- 배치안 프리셋 : Claude 안 + GPT 검토 3안 (GPT 좌표표 cm → 중심 좌표 m 변환) ---------- */
+const T = PI / 2;
+const PRESETS = {
+  r1: { title: '추천 1 · 시야 개방형', note: '키 큰 기기(가챠 10줄·포카아이)는 전부 도로측 창에 붙이고, 옆 매장 유리 쪽은 낮은 키오스크·미러포토·테이블만 둬 매장에서 안이 훤히 보입니다. 입구에서 정면 끝에 인형뽑기 2대가 보여 끌어들이는 동선. 미러포토 배경은 컬러풀한 가챠 벽. 증명사진기 제외.',
+    items: { acc: [2.1, 0, 0], g5: [0, 1.125, RS], g5b: [0, 3.3, RS], pocai: [0, 5.3, RS], clawA: [.4, 7, RE], clawB: [1.2, 7, RE], dojeon: [3, 1.25, RP], haru: [3, 1.8, RP], mirror: [3, 3.2, RP], t1: [2.7, 4.6, T], t2: [2.7, 6.3, T] } },
+  r2: { title: '추천 2 · 최대 수용형', note: '요청 기기 전부(가챠 10줄 포함) + 테이블 2개. 파티션 쪽에 포카아이·인형뽑기·키오스크를 일렬로, 미러포토는 안쪽 끝에서 입구를 보고 중앙 통로가 촬영거리. 매장 쪽 유리 시야는 기기에 가려집니다. 증명사진기 제외.',
+    items: { acc: [2.1, 0, 0], g5: [0, 1.125, RS], g5b: [0, 3.3, RS], pocai: [3, 1.9, RP], clawA: [3, 3.17, RP], clawB: [3, 3.95, RP], dojeon: [3, 4.6, RP], haru: [3, 5.15, RP], mirror: [1.5, 7, RE], t1: [.35, 5.3, T], t2: [2.7, 6.4, T] } },
+  r3: { title: '추천 3 · 포토 스튜디오형', note: '미러포토+증명사진기가 안쪽 흰 배경판을 보고, 두 기기 뒷면은 인형뽑기 2대가 등을 맞대 가림. 촬영 품질 최고. 가챠 8줄, 테이블 2개. 입구에서 안쪽 끝은 기기 섬에 가려집니다.',
+    items: { acc: [2.1, 0, 0], g5: [0, 1.1, RS], g3: [0, 2.9, RS], pocai: [3, 1.9, RP], dojeon: [3, 3.05, RP], haru: [3, 3.6, RP], clawA: [.4, 4.55, RE], clawB: [1.2, 4.55, RE], mirror: [.5, 5.3, 0], idp: [1.3, 5.3, 0], bd: [.78, 7, PI], t1: [2.3, 5.7, 0], t2: [2.3, 6.6, 0] } },
+  r4: { title: '추천 4 · 도로 쇼윈도형', note: '인형뽑기·포카아이를 도로측 창에 붙여 거리에서 네온이 보이게(창 쪽 기기 뒷면에 조명 패널 권장). 키오스크·가챠 5줄은 파티션, 미러포토는 파티션에서 도로를 보고 흰 배경판을 창 앞에. 안쪽 끝에 가챠 3줄 + 테이블 2개.',
+    items: { acc: [2.1, 0, 0], clawA: [.34, 1.29, RS], clawB: [.34, 2.14, RS], pocai: [.35, 3.47, RS], dojeon: [3, 1.25, RP], haru: [3, 1.8, RP], g5: [3, 3.15, RP], mirror: [2.45, 4.84, RP], bd: [.1, 4.85, RS], g3: [0, 6.3, RS], t1: [1.45, 6.4, T], t2: [2.4, 6.4, T] } },
+  r5: { title: '추천 5 · 휴식 라운지 + 키즈', note: '기기는 앞쪽 2/3에 모으고 안쪽 끝을 커피 들고 쉬는 라운지(테이블 2개)와 키즈 코너로. 가챠 5줄, 미러포토는 파티션에서 도로측 배경판을 봄. 아이 동반 손님·체류시간 우선.',
+    items: { acc: [2.1, 0, 0], g5: [0, 1.125, RS], clawA: [0, 2.625, RS], clawB: [0, 3.425, RS], pocai: [3, 1.9, RP], dojeon: [3, 3.05, RP], haru: [3, 3.6, RP], mirror: [3, 4.9, RP], bd: [0, 4.9, RS], t1: [.55, 6.1, T], t2: [1.55, 6.1, T], kids: [2.5, 7, PI] } },
+  gpt1: { title: 'GPT ① · 촬영존 안쪽', note: 'GPT 검토안. 촬영 품질 우선, 촬영기 뒷면을 인형뽑기 1대·가챠 1줄로 가림. 빠짐: 인형뽑기 1대, 가챠 9줄.',
+    items: { acc: [2.1, 0, 0], pocai: [.2, 1.67, RS], dojeon: [.2, 2.85, RS], haru: [.2, 3.4, RS], t1: [2.6, 1.0, T], t2: [2.6, 2.65, T], clawA: [.55, 4.11, RE], g1: [1.22, 4.14, RE], mirror: [.49, 4.85, 0], idp: [1.3, 4.85, 0], bd: [.85, 7, PI] } },
+  gpt2: { title: 'GPT ② · 입구 촬영 + 안쪽 휴식', note: 'GPT 검토안. 카페 좌석이 자연스럽지만 입구 촬영 중 손님이 지나감. 빠짐: 가챠 10줄, 키오스크 2대.',
+    items: { acc: [2.1, 0, 0], mirror: [.49, 1.75, 0], idp: [1.3, 1.75, 0], bd: [.85, 3.6, PI], clawA: [.19, 4.2, RS], clawB: [.19, 5.0, RS], pocai: [3, 4.47, RP], t1: [.75, 6.35, T], t2: [2.25, 6.35, T] } },
+  gpt3: { title: 'GPT ③ · 도로 노출 우선', note: 'GPT 추천안. 빠짐: 증명사진기, 가챠 5줄.',
+    items: { acc: [2.1, 0, 0], clawA: [.34, 1.29, RS], clawB: [.34, 2.14, RS], pocai: [.35, 3.47, RS], dojeon: [3, 1.0, RP], haru: [3, 1.55, RP], g5: [3, 2.98, RP], mirror: [2.45, 4.84, RP], bd: [.1, 4.85, RS], t1: [.75, 6.35, T], t2: [2.25, 6.35, T] } },
+};
+let preset = 'r1';
+function applyPreset(name) {
+  preset = name; const pr = PRESETS[name];
+  machines.forEach(m => {
+    const it = pr.items[m.id];
+    m.g.visible = !!it;
+    if (it) { m.g.position.set(it[0], 0, it[1]); m.g.rotation.y = it[2]; settle(m); }
+  });
+  document.querySelectorAll('#presets button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === name)));
+  const pn = document.getElementById('p-note'); if (pn) pn.textContent = pr.title + ' — ' + pr.note;
+  document.querySelectorAll('#mlist button').forEach((b, i) => b.hidden = !machines[i].g.visible);
+  if (selected && !selected.g.visible) select(null);
+  updateOverlap(); syncLabels(); readout();
+}
 applyPhotoMode();
 
 // 기기와 겹치는 기존 가구 세트 자동 숨김
@@ -1126,7 +1178,7 @@ const furnBoxes = G.furniture.children.map(c => ({ c, b: new THREE.Box3().setFro
 let hiddenCount = 0;
 function updateOverlap() {
   hiddenCount = 0;
-  const rects = machines.map(m => rectOf(m, true));
+  const rects = machines.filter(m => m.g.visible).map(m => rectOf(m, true));
   for (const { c, b } of furnBoxes) {
     const hit = rects.some(r => r.x0 < b.max.x - .03 && r.x1 > b.min.x + .03 && r.z0 < b.max.z - .03 && r.z1 > b.min.z + .03);
     c.visible = !hit; if (hit) hiddenCount++;
@@ -1136,7 +1188,7 @@ function updateOverlap() {
 }
 function machineOverlap(m) {
   const a = rectOf(m);
-  return machines.some(o => o !== m && (() => { const b = rectOf(o); return a.x0 < b.x1 - .005 && a.x1 > b.x0 + .005 && a.z0 < b.z1 - .005 && a.z1 > b.z0 + .005; })());
+  return machines.some(o => o !== m && o.g.visible && (() => { const b = rectOf(o); return a.x0 < b.x1 - .005 && a.x1 > b.x0 + .005 && a.z0 < b.z1 - .005 && a.z1 > b.z0 + .005; })());
 }
 let selected = null;
 const faceName = ry => { const s = Math.round(Math.sin(ry)), c = Math.round(Math.cos(ry)); return s === -1 ? '도로측 창' : s === 1 ? '옆 매장 유리' : c === 1 ? '안쪽 창' : '출입문'; };
@@ -1216,7 +1268,7 @@ walkpad.querySelectorAll('button').forEach(b => {
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), floorPlane = new THREE.Plane(V(0, 1, 0), 0), tmp = V(0, 0, 0);
 let drag = null;
 function aim(e) { const r = el.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(ndc, camera); }
-function hitMachine(e) { aim(e); const h = ray.intersectObjects(machines.map(m => m.hit), false); return h.length ? machines.find(m => m.hit === h[0].object) : null; }
+function hitMachine(e) { aim(e); const h = ray.intersectObjects(machines.filter(m => m.g.visible).map(m => m.hit), false); return h.length ? machines.find(m => m.hit === h[0].object) : null; }
 stage.addEventListener('pointerdown', e => {
   if (mode !== 'orbit' || e.button !== 0 || !e.isPrimary) return;
   const m = hitMachine(e); if (!m) return;
@@ -1234,9 +1286,10 @@ stage.addEventListener('pointermove', e => {
 });
 const endDrag = () => { if (!drag) return; drag = null; stage.style.cursor = ''; updateOverlap(); syncLabels(); readout(); };
 stage.addEventListener('pointerup', endDrag); stage.addEventListener('pointercancel', endDrag);
-function rotateSel() { const m = selected || machines[0]; if (!selected) select(m); m.g.rotation.y += PI / 2; settle(m); updateOverlap(); syncLabels(); readout(); }
+function rotateSel() { const m = selected || machines.find(x => x.g.visible); if (!selected) select(m); m.g.rotation.y += PI / 2; settle(m); updateOverlap(); syncLabels(); readout(); }
 document.getElementById('m-rot').addEventListener('click', rotateSel);
-document.getElementById('m-reset').addEventListener('click', () => { machines.forEach(m => { m.g.position.set(m.home.x, 0, m.home.z); m.g.rotation.y = m.home.ry; settle(m); }); updateOverlap(); syncLabels(); readout(); });
+document.getElementById('m-reset').addEventListener('click', () => applyPreset(preset));
+document.querySelectorAll('#presets button').forEach(b => b.addEventListener('click', () => applyPreset(b.dataset.p)));
 {
   const ml = document.getElementById('mlist');
   machines.forEach((m, i) => {
@@ -1311,8 +1364,7 @@ function frame() {
   renderer.render(scene, camera); labelR.render(scene, camera);
   requestAnimationFrame(frame);
 }
-updateOverlap();
-readout();
+applyPreset('r1');
 syncLabels();
 frame();
 </script>
